@@ -3,6 +3,9 @@
 #include "keyboard.h"	// キーボードの処理
 #include "FPS.h"		// FPSの処理
 
+// マクロ定義
+#define TAMA_DIV_MAX	4	// 弾の画像の最大数
+
 // 構造体の定義
 
 // 画像の構造体
@@ -74,6 +77,12 @@ int fadeInCntInit = fadeTimeMax;	// 初期値
 int fadeInCnt = fadeInCntInit;		// フェードインのカウンタ
 int fadeInCntMax = fadeTimeMax;		// フェードインのカウンタMAX
 
+// 弾の画像のハンドル
+int tama[TAMA_DIV_MAX];	
+int tamaIndex = 0;			// 画像の添字
+int tamaChangeCnt = 0;		// 画像を変えるタイミング
+int tamaChangeCntMax = 30;	// 画像を変えるタイミングMAX
+
 // プロトタイプ宣言
 VOID Title(VOID);		// タイトル画面
 VOID TitleProc(VOID);	// タイトル画面（処理）
@@ -91,21 +100,22 @@ VOID Change(VOID);		// 切り替え画面
 VOID ChangeProc(VOID);	// 切り替え画面（処理）
 VOID ChangeDraw(VOID);	// 切り替え画面（描画）
 
-VOID ChangeScene(GAME_SCENE scene);											// シーン切り替え
+VOID ChangeScene(GAME_SCENE scene);												// シーン切り替え
 
-VOID CollUpdatePlayer(CHARACTOR* chara);									// プレイヤーの当たり判定の領域更新
-VOID CollUpdate(CHARACTOR* chara);											// 当たり判定の領域更新
-VOID CollUpdateField(CHARACTOR* chara);										// フィールドの当たり判定の領域更新
+VOID CollUpdatePlayer(CHARACTOR* chara);										// プレイヤーの当たり判定の領域更新
+VOID CollUpdate(CHARACTOR* chara);												// 当たり判定の領域更新
+VOID CollUpdateField(CHARACTOR* chara);											// フィールドの当たり判定の領域更新
 
-BOOL OnCollRect(RECT object1, RECT object2);								// 矩形と矩形の当たり判定
+BOOL OnCollRect(RECT object1, RECT object2);									// 矩形と矩形の当たり判定
 
-BOOL GameLoad(VOID);														// ゲームのデータを読み込み
+BOOL GameLoad(VOID);															// ゲームのデータを読み込み
 
-BOOL LoadImageMem(IMAGE* image, const char* path);							//画像のデータを読み込み
+BOOL LoadImageMem(IMAGE* image, const char* path);								//画像のデータを読み込み
+BOOL LoadAudio(AUDIO* audio, const char* path, int volume, int playType);		// 音楽のデータを読み込み
+BOOL LoadImageDivMem(int* handle, const char* path, int divYoko, int divTate);	// ゲームの画像の分割読み込み
 
-BOOL LoadAudio(AUDIO* audio, const char* path, int volume, int playType);	// 音楽のデータを読み込み
+VOID GameInit(VOID);															// ゲームのデータの初期化
 
-VOID GameInit(VOID);
 
 // プログラムは WinMain から始まる
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
@@ -206,7 +216,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		ScreenFlip();
 	}
 
-	// 終わる時の処理
+	// 読み込んだ画像を開放
+	for (int i = 0; i < TAMA_DIV_MAX; i++) { DeleteGraph(tama[i]); }
 
 
 	// ＤＸライブラリ使用の終了処理
@@ -219,10 +230,74 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 /// ゲームデータの読み込み
 /// </summary>
 /// <returns>読み込めたらTRUE / 読み込めなかったらFALSE</returns>
-BOOL GameLoad(VOID) {
-	
+BOOL GameLoad(VOID) 
+{	
+	// 画像を分割して読み込み
+	if (LoadImageDivMem(&tama[0], ".\\Image//tama.png", 4, 1) == FALSE) { return FALSE; }
 
 	return TRUE;	//すべて読み込めた
+}
+
+/// <summary>
+/// 画像を分割してメモリに読み込み
+/// </summary>
+/// <param name="handle">ハンドル配列の先頭アドレス</param>
+/// <param name="path">画像のパス</param>
+/// <param name="divYoko">分割するときの横の数</param>
+/// <param name="divTate">分割するときの縦の数</param>
+/// <returns></returns>
+BOOL LoadImageDivMem(int *handle,const char *path,int divYoko, int divTate)
+{
+	// 弾の読み込み
+	int isTamaLoad = -1;	// 画像が読み込めたか
+
+	// 一時的に画像のハンドルを用意する
+	int TamaHandle = LoadGraph(path);
+
+	// 読み込みエラー
+	if (TamaHandle == -1)
+	{
+		MessageBox(
+			GetMainWindowHandle(),	// ウィンドウハンドル
+			path,					// 本文
+			"画像読み込みエラー",	// タイトル
+			MB_OK					// ボタン
+		);
+
+		return FALSE;	// 読み込み失敗
+	}
+
+	// 画像の幅と高さを取得
+	int TamaWidth = -1;		// 幅
+	int TamaHeight = -1;	// 高さ
+	GetGraphSize(TamaHandle, &TamaWidth, &TamaHeight);
+
+	// 分割して読み込み
+	isTamaLoad = LoadDivGraph(
+		path,										// 画像のパス
+		TAMA_DIV_MAX,								// 分割総数
+		divYoko, divTate,							// 横の分割
+		TamaWidth / divYoko, TamaHeight / divTate,	// 画像一つ分の幅、高さ
+		handle										// 連続で管理する配列の先頭アドレス
+	);
+
+	// 分割エラー
+	if (isTamaLoad == -1)
+	{
+		MessageBox(
+			GetMainWindowHandle(),	// ウィンドウハンドル
+			path,					// 本文
+			"画像分割エラー",		// タイトル
+			MB_OK					// ボタン
+		);
+
+		return FALSE;	// 読み込み失敗
+	}
+
+	// 一時的に読み込んだハンドルを解放
+	DeleteGraph(TamaHandle);
+
+	return TRUE;
 }
 
 /// <summary>
@@ -352,6 +427,26 @@ VOID TitleProc(VOID)
 /// </summary>
 VOID TitleDraw(VOID)
 {
+	// 弾の描画
+	DrawGraph(0, 0, tama[tamaIndex], TRUE);
+
+	// 画像を変えるタイミング
+	if (tamaChangeCnt < tamaChangeCntMax)
+	{
+		tamaChangeCnt++;
+	}
+	else
+	{
+		// 弾の添字が弾の分割数の最大よりも下のとき
+		if (tamaIndex < TAMA_DIV_MAX - 1)
+		{
+			tamaIndex++;	// 次の画像へ
+		}
+		else
+		{
+			tamaIndex = 0;	// 最初に戻す
+		}
+	}
 	// タイトル背景の描画
 	DrawString(0, 0, "タイトル画面", GetColor(0, 0, 0));
 
