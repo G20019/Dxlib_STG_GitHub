@@ -828,10 +828,10 @@ VOID PlayProc(VOID)
 				if (tama[cnt].isDraw == TRUE)
 				{
 					// “–‚½‚è”»’è
-					if (OnCollRect(teki[cnt].coll, tama[cnt].coll) == TRUE)
+					if (OnCollRect(teki[i].coll, tama[cnt].coll) == TRUE)
 					{
 						tama[cnt].isDraw = FALSE;		// ’e‚Ì•`‰æ‚Í‚µ‚È‚¢
-						teki[cnt].img.IsDraw = FALSE;	// “G‚Ì•`‰æ‚à‚µ‚È‚¢
+						teki[i].img.IsDraw = FALSE;	// “G‚Ì•`‰æ‚à‚µ‚È‚¢
 						score += 100;					// ƒXƒRƒA‰ÁŽZ
 					}
 				}
